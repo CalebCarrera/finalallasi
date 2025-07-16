@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import Image from "next/image"
+
 
 export function LoginForm({
   className,
@@ -15,9 +17,9 @@ export function LoginForm({
           <form className="p-6 md:p-8">
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
-                <h1 className="text-2xl font-bold">Welcome back</h1>
+                <h1 className="text-2xl font-bold">Bienvenido de nuevo</h1>
                 <p className="text-muted-foreground text-balance">
-                  Login to your Acme Inc account
+                  Inicia sesión en tu cuenta
                 </p>
               </div>
               <div className="grid gap-3">
@@ -36,17 +38,17 @@ export function LoginForm({
                     href="#"
                     className="ml-auto text-sm underline-offset-2 hover:underline"
                   >
-                    Forgot your password?
+                    Olvidaste tu contraseña?
                   </a>
                 </div>
                 <Input id="password" type="password" required />
               </div>
               <Button type="submit" className="w-full">
-                Login
+                Iniciar sesión
               </Button>
               <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
                 <span className="bg-card text-muted-foreground relative z-10 px-2">
-                  Or continue with
+                  O continua con
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -79,15 +81,15 @@ export function LoginForm({
                 </Button>
               </div>
               <div className="text-center text-sm">
-                Don&apos;t have an account?{" "}
+                No tienes una cuenta?{" "}
                 <a href="#" className="underline underline-offset-4">
-                  Sign up
+                  Registrate
                 </a>
               </div>
             </div>
           </form>
           <div className="bg-muted relative hidden md:block">
-            <img
+            <Image
               src="/Kenny-McCormick-on-South-Park.png"
               alt="Image"
               className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"

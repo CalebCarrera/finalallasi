@@ -1,10 +1,9 @@
+
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
-import { DataTable } from "@/components/data-table";
-import { SectionCards } from "@/components/section-cards";
+ import { SectionCards } from "@/components/section-cards";
 
-import data from "./data.json";
 
-export default function WelcomePage() {
+export default function LocalPage() {
   return (
     <>
       <div className="flex flex-1 flex-col">
@@ -14,7 +13,6 @@ export default function WelcomePage() {
             <div className="px-4 lg:px-6">
               <ChartAreaInteractive />
             </div>
-            <DataTable data={data} />
           </div>
         </div>
       </div>
