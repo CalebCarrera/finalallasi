@@ -1,24 +1,28 @@
 export interface Entrenamiento {
-  id: number;
-  nombre: string;
-  descripcion: string;
-  tipo: string; // "Musculación", "Cardio", "Yoga", "CrossFit", etc.
-  duracion: number; // en minutos
-  nivel: string; // "Principiante", "Intermedio", "Avanzado"
-  capacidadMaxima: number;
-  precio: number;
-  entrenadorId: number;
-  entrenadorNombre: string;
-  active: boolean;
+  entrenamientoId?: number; // Opcional porque es generado automáticamente
+  tipo?: string;
+  fecha: string; // ISO format (yyyy-MM-dd)
+  horaInicio: string; // formato HH:mm:ss
+  horaFin: string;    // formato HH:mm:ss
+  local?: {
+    id: number;
+    nombre: string;
+    direccion: string;
+    tipo: string;
+    capacidad: number;
+    estado: boolean;
+  } | null;
+  entrenador?: {
+    id: number;
+    nombres: string;
+    apellidos: string;
+    dni: string;
+    correo: string;
+    telefono: string;
+    especialidad: string;
+    estado: boolean;
+  } | null;
+  maxParticipantes?: number;
+  descripcion?: string;
+  informe?: string | null;
 }
-
-export interface EntrenamientoFormData {
-  nombre: string;
-  descripcion: string;
-  tipo: string;
-  duracion: number;
-  nivel: string;
-  capacidadMaxima: number;
-  precio: number;
-  entrenadorId: number;
-} 

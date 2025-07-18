@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { 
   Search, 
   Plus, 
@@ -19,82 +19,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Entrenamiento, EntrenamientoFormData } from "@/services/types/Entrenamiento"
+import { Entrenamiento } from "@/services/types/Entrenamiento"
+import { getEntrenamientos, postEntrenamiento, putEntrenamiento, deleteEntrenamiento } from "@/services/api/entrenamiento"
 
-// Datos de ejemplo para entrenamientos
-const entrenamientosData: Entrenamiento[] = [
-  {
-    id: 1,
-    nombre: "Musculación Básica",
-    descripcion: "Entrenamiento de fuerza para principiantes",
-    tipo: "Musculación",
-    duracion: 60,
-    nivel: "Principiante",
-    capacidadMaxima: 15,
-    precio: 25,
-    entrenadorId: 1,
-    entrenadorNombre: "Carlos García",
-    active: true
-  },
-  {
-    id: 2,
-    nombre: "Yoga Flow",
-    descripcion: "Sesión de yoga para flexibilidad y relajación",
-    tipo: "Yoga",
-    duracion: 90,
-    nivel: "Intermedio",
-    capacidadMaxima: 20,
-    precio: 30,
-    entrenadorId: 2,
-    entrenadorNombre: "Ana Martínez",
-    active: true
-  },
-  {
-    id: 3,
-    nombre: "CrossFit Intenso",
-    descripcion: "Entrenamiento funcional de alta intensidad",
-    tipo: "CrossFit",
-    duracion: 45,
-    nivel: "Avanzado",
-    capacidadMaxima: 12,
-    precio: 35,
-    entrenadorId: 3,
-    entrenadorNombre: "Luis Rodríguez",
-    active: true
-  },
-  {
-    id: 4,
-    nombre: "Cardio Dance",
-    descripcion: "Baile aeróbico para quemar calorías",
-    tipo: "Cardio",
-    duracion: 50,
-    nivel: "Principiante",
-    capacidadMaxima: 25,
-    precio: 20,
-    entrenadorId: 4,
-    entrenadorNombre: "María López",
-    active: false
-  },
-  {
-    id: 5,
-    nombre: "Spinning Pro",
-    descripcion: "Ciclismo indoor de alta intensidad",
-    tipo: "Spinning",
-    duracion: 55,
-    nivel: "Intermedio",
-    capacidadMaxima: 18,
-    precio: 28,
-    entrenadorId: 5,
-    entrenadorNombre: "Roberto Hernández",
-    active: true
-  }
-]
+// Tipo para el formulario de entrenamiento
+type EntrenamientoFormData = Omit<Entrenamiento, "entrenamientoId">;
 
 export default function EntrenamientoPage() {
-  const [entrenamientos, setEntrenamientos] = useState<Entrenamiento[]>(entrenamientosData)
+  const [entrenamientos, setEntrenamientos] = useState<Entrenamiento[]>([])
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
-  const [sortField, setSortField] = useState<keyof Entrenamiento>("id")
+  const [sortField, setSortField] = useState<keyof Entrenamiento>("entrenamientoId")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [showAdd, setShowAdd] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -104,25 +39,57 @@ export default function EntrenamientoPage() {
   const pageSize = 10
 
   const [formData, setFormData] = useState<EntrenamientoFormData>({
-    nombre: "",
-    descripcion: "",
     tipo: "",
-    duracion: 60,
-    nivel: "Principiante",
-    capacidadMaxima: 15,
-    precio: 0,
-    entrenadorId: 1
+    fecha: new Date().toISOString().split("T")[0],
+    horaInicio: "08:00:00",
+    horaFin: "09:00:00",
+    local: {
+      id: 1,
+      nombre: "",
+      direccion: "",
+      tipo: "",
+      capacidad: 50,
+      estado: true
+    },
+    entrenador: {
+      id: 1,
+      nombres: "",
+      apellidos: "",
+      dni: "",
+      correo: "",
+      telefono: "",
+      especialidad: "",
+      estado: true
+    },
+    maxParticipantes: 10,
+    descripcion: "",
+    informe: ""
   })
+
+  // Cargar entrenamientos al montar el componente
+  useEffect(() => {
+    loadEntrenamientos()
+  }, [])
+
+  const loadEntrenamientos = async () => {
+    setLoading(true)
+    try {
+      const data = await getEntrenamientos()
+      setEntrenamientos(data)
+    } catch (error) {
+      console.error("Error loading entrenamientos:", error)
+    }
+    setLoading(false)
+  }
 
   // Filtrar y ordenar entrenamientos
   const filtered = useMemo(() => {
     return entrenamientos.filter((e) => {
       const searchTerm = search.toLowerCase()
       return (
-        e.nombre.toLowerCase().includes(searchTerm) ||
-        e.descripcion.toLowerCase().includes(searchTerm) ||
-        e.tipo.toLowerCase().includes(searchTerm) ||
-        e.entrenadorNombre.toLowerCase().includes(searchTerm)
+        (e.descripcion?.toLowerCase().includes(searchTerm) || false) ||
+        (e.tipo?.toLowerCase().includes(searchTerm) || false) ||
+        (e.entrenador?.id?.toString().includes(searchTerm) || false)
       )
     })
   }, [entrenamientos, search])
@@ -168,105 +135,177 @@ export default function EntrenamientoPage() {
     return sortDirection === "asc" ? " ↑" : " ↓"
   }
 
-  const handleInputChange = (field: keyof EntrenamientoFormData, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const handleInputChange = (field: keyof EntrenamientoFormData, value: string | number | any) => {
+    setFormData((prev: EntrenamientoFormData) => ({ ...prev, [field]: value }))
+  }
+
+  const handleEntrenadorChange = (entrenadorId: number) => {
+    setFormData((prev: EntrenamientoFormData) => ({
+      ...prev,
+      entrenador: { 
+        id: entrenadorId,
+        nombres: "",
+        apellidos: "",
+        dni: "",
+        correo: "",
+        telefono: "",
+        especialidad: "",
+        estado: true
+      }
+    }))
+  }
+
+  const handleLocalChange = (localId: number) => {
+    setFormData((prev: EntrenamientoFormData) => ({
+      ...prev,
+      local: { 
+        id: localId,
+        nombre: "",
+        direccion: "",
+        tipo: "",
+        capacidad: 50,
+        estado: true
+      }
+    }))
   }
 
   const resetForm = () => {
     setFormData({
-      nombre: "",
-      descripcion: "",
       tipo: "",
-      duracion: 60,
-      nivel: "Principiante",
-      capacidadMaxima: 15,
-      precio: 0,
-      entrenadorId: 1
+      fecha: new Date().toISOString().split("T")[0],
+      horaInicio: "08:00:00",
+      horaFin: "09:00:00",
+      local: {
+        id: 1,
+        nombre: "",
+        direccion: "",
+        tipo: "",
+        capacidad: 50,
+        estado: true
+      },
+      entrenador: {
+        id: 1,
+        nombres: "",
+        apellidos: "",
+        dni: "",
+        correo: "",
+        telefono: "",
+        especialidad: "",
+        estado: true
+      },
+      maxParticipantes: 10,
+      descripcion: "",
+      informe: ""
     })
   }
 
   const handleAddEntrenamiento = async () => {
-    if (!formData.nombre || !formData.tipo || !formData.descripcion) {
+    if (!formData.tipo || !formData.fecha || !formData.horaInicio || !formData.horaFin || !formData.entrenador?.id || !formData.local?.id) {
       alert("Por favor completa los campos obligatorios")
       return
     }
-
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    const entrenador = entrenamientos.find(e => e.entrenadorId === formData.entrenadorId)
-    const newEntrenamiento: Entrenamiento = {
-      id: Math.max(...entrenamientos.map(e => e.id)) + 1,
+    
+    // Preparar datos para el backend - enviar entrenadorId y localId como campos directos
+    const dataToSend = {
       ...formData,
-      entrenadorNombre: entrenador?.entrenadorNombre || "Sin asignar",
-      active: true
+      entrenadorId: formData.entrenador.id,
+      localId: formData.local.id
     }
-
-    setEntrenamientos(prev => [...prev, newEntrenamiento])
-    setShowAdd(false)
-    resetForm()
+    
+    const result = await postEntrenamiento(dataToSend)
+    if (result) {
+      setEntrenamientos(prev => [...prev, result])
+      setShowAdd(false)
+      resetForm()
+    } else {
+      alert("Error al guardar el entrenamiento")
+    }
     setLoading(false)
   }
 
   const openEditModal = (id: number) => {
-    const entrenamiento = entrenamientos.find(e => e.id === id)
+    const entrenamiento = entrenamientos.find(e => e.entrenamientoId === id)
     if (entrenamiento) {
       setFormData({
-        nombre: entrenamiento.nombre,
-        descripcion: entrenamiento.descripcion,
-        tipo: entrenamiento.tipo,
-        duracion: entrenamiento.duracion,
-        nivel: entrenamiento.nivel,
-        capacidadMaxima: entrenamiento.capacidadMaxima,
-        precio: entrenamiento.precio,
-        entrenadorId: entrenamiento.entrenadorId
+        tipo: entrenamiento.tipo || "",
+        fecha: entrenamiento.fecha,
+        horaInicio: entrenamiento.horaInicio,
+        horaFin: entrenamiento.horaFin,
+        local: entrenamiento.local || { 
+          id: 1,
+          nombre: "",
+          direccion: "",
+          tipo: "",
+          capacidad: 50,
+          estado: true
+        },
+        entrenador: entrenamiento.entrenador || { 
+          id: 1,
+          nombres: "",
+          apellidos: "",
+          dni: "",
+          correo: "",
+          telefono: "",
+          especialidad: "",
+          estado: true
+        },
+        maxParticipantes: entrenamiento.maxParticipantes || 10,
+        descripcion: entrenamiento.descripcion || "",
+        informe: entrenamiento.informe || ""
       })
       setEditModal({ open: true, id })
     }
   }
 
   const handleEditSave = async () => {
-    if (!formData.nombre || !formData.tipo || !formData.descripcion) {
+    if (!formData.tipo || !formData.fecha || !formData.horaInicio || !formData.horaFin || !formData.entrenador?.id || !formData.local?.id) {
       alert("Por favor completa los campos obligatorios")
       return
     }
-
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    const entrenador = entrenamientos.find(e => e.entrenadorId === formData.entrenadorId)
-    setEntrenamientos(prev => 
-      prev.map(e => 
-        e.id === editModal.id 
-          ? { ...e, ...formData, entrenadorNombre: entrenador?.entrenadorNombre || "Sin asignar" }
-          : e
+    
+    // Preparar datos para el backend - enviar entrenadorId y localId como campos directos
+    const dataToSend = {
+      ...formData,
+      entrenamientoId: editModal.id,
+      entrenadorId: formData.entrenador.id,
+      localId: formData.local.id
+    }
+    
+    const result = await putEntrenamiento(dataToSend)
+    if (result) {
+      setEntrenamientos(prev =>
+        prev.map(e => e.entrenamientoId === result.entrenamientoId ? result : e)
       )
-    )
-    setEditModal({ open: false, id: 0 })
-    resetForm()
+      setEditModal({ open: false, id: 0 })
+      resetForm()
+    } else {
+      alert("Error al actualizar el entrenamiento")
+    }
     setLoading(false)
   }
 
   const openDeleteModal = (id: number) => {
-    const entrenamiento = entrenamientos.find(e => e.id === id)
+    const entrenamiento = entrenamientos.find(e => e.entrenamientoId === id)
     if (entrenamiento) {
       setDeleteModal({ 
         open: true, 
         id, 
-        name: entrenamiento.nombre 
+        name: entrenamiento.descripcion || "Entrenamiento" 
       })
     }
   }
 
   const handleDelete = async (id: number) => {
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    setEntrenamientos(prev => prev.filter(e => e.id !== id))
-    setDeleteModal({ open: false, id: 0, name: "" })
+    const success = await deleteEntrenamiento(id)
+    if (success) {
+      setEntrenamientos(prev => prev.filter(e => e.entrenamientoId !== id))
+      setDeleteModal({ open: false, id: 0, name: "" })
+    } else {
+      alert("Error al eliminar el entrenamiento")
+    }
     setLoading(false)
   }
 
@@ -277,8 +316,8 @@ export default function EntrenamientoPage() {
 
     setEntrenamientos(prev => 
       prev.map(e => 
-        e.id === id 
-          ? { ...e, active: !e.active }
+        e.entrenamientoId === id
+          ? { ...e, descripcion: e.descripcion + " (Inactivo)" }
           : e
       )
     )
@@ -329,15 +368,6 @@ export default function EntrenamientoPage() {
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div>
-                    <label htmlFor="nombre" className="text-sm font-medium">Nombre</label>
-                    <Input 
-                      id="nombre" 
-                      value={formData.nombre} 
-                      onChange={(e) => handleInputChange("nombre", e.target.value)}
-                      placeholder="Musculación Básica"
-                    />
-                  </div>
-                  <div>
                     <label htmlFor="descripcion" className="text-sm font-medium">Descripción</label>
                     <Input 
                       id="descripcion" 
@@ -346,56 +376,57 @@ export default function EntrenamientoPage() {
                       placeholder="Entrenamiento de fuerza para principiantes"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label htmlFor="tipo" className="text-sm font-medium">Tipo</label>
-                      <Select value={formData.tipo} onValueChange={(value) => handleInputChange("tipo", value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Musculación">Musculación</SelectItem>
-                          <SelectItem value="Cardio">Cardio</SelectItem>
-                          <SelectItem value="Yoga">Yoga</SelectItem>
-                          <SelectItem value="CrossFit">CrossFit</SelectItem>
-                          <SelectItem value="Spinning">Spinning</SelectItem>
-                          <SelectItem value="Pilates">Pilates</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label htmlFor="nivel" className="text-sm font-medium">Nivel</label>
-                      <Select value={formData.nivel} onValueChange={(value) => handleInputChange("nivel", value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar nivel" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Principiante">Principiante</SelectItem>
-                          <SelectItem value="Intermedio">Intermedio</SelectItem>
-                          <SelectItem value="Avanzado">Avanzado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div>
+                    <label htmlFor="tipo" className="text-sm font-medium">Tipo</label>
+                    <Select value={formData.tipo} onValueChange={(value) => handleInputChange("tipo", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Personal">Personal</SelectItem>
+                        <SelectItem value="Grupal">Grupal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label htmlFor="entrenador" className="text-sm font-medium">Entrenador ID</label>
+                    <Input 
+                      id="entrenador" 
+                      type="number"
+                      value={formData.entrenador?.id || 1} 
+                      onChange={(e) => handleEntrenadorChange(parseInt(e.target.value) || 1)}
+                      min="1"
+                      placeholder="ID del entrenador"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="local" className="text-sm font-medium">Local ID</label>
+                    <Input 
+                      id="local" 
+                      type="number"
+                      value={formData.local?.id || 1} 
+                      onChange={(e) => handleLocalChange(parseInt(e.target.value) || 1)}
+                      min="1"
+                      placeholder="ID del local"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label htmlFor="duracion" className="text-sm font-medium">Duración (min)</label>
+                      <label htmlFor="fecha" className="text-sm font-medium">Fecha</label>
                       <Input 
-                        id="duracion" 
-                        type="number"
-                        value={formData.duracion} 
-                        onChange={(e) => handleInputChange("duracion", parseInt(e.target.value) || 60)}
-                        min="15"
-                        max="180"
+                        id="fecha" 
+                        type="date"
+                        value={formData.fecha} 
+                        onChange={(e) => handleInputChange("fecha", e.target.value)}
                       />
                     </div>
                     <div>
-                      <label htmlFor="capacidadMaxima" className="text-sm font-medium">Capacidad Máx.</label>
+                      <label htmlFor="maxParticipantes" className="text-sm font-medium">Max Participantes</label>
                       <Input 
-                        id="capacidadMaxima" 
+                        id="maxParticipantes" 
                         type="number"
-                        value={formData.capacidadMaxima} 
-                        onChange={(e) => handleInputChange("capacidadMaxima", parseInt(e.target.value) || 15)}
+                        value={formData.maxParticipantes} 
+                        onChange={(e) => handleInputChange("maxParticipantes", parseInt(e.target.value) || 10)}
                         min="1"
                         max="50"
                       />
@@ -403,25 +434,31 @@ export default function EntrenamientoPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label htmlFor="precio" className="text-sm font-medium">Precio (S/)</label>
+                      <label htmlFor="horaInicio" className="text-sm font-medium">Hora Inicio</label>
                       <Input 
-                        id="precio" 
-                        type="number"
-                        value={formData.precio} 
-                        onChange={(e) => handleInputChange("precio", parseInt(e.target.value) || 0)}
-                        min="0"
+                        id="horaInicio" 
+                        type="time"
+                        value={formData.horaInicio} 
+                        onChange={(e) => handleInputChange("horaInicio", e.target.value + ":00")}
                       />
                     </div>
                     <div>
-                      <label htmlFor="entrenadorId" className="text-sm font-medium">Entrenador ID</label>
+                      <label htmlFor="horaFin" className="text-sm font-medium">Hora Fin</label>
                       <Input 
-                        id="entrenadorId" 
-                        type="number"
-                        value={formData.entrenadorId} 
-                        onChange={(e) => handleInputChange("entrenadorId", parseInt(e.target.value) || 1)}
-                        min="1"
+                        id="horaFin" 
+                        type="time"
+                        value={formData.horaFin} 
+                        onChange={(e) => handleInputChange("horaFin", e.target.value + ":00")}
                       />
                     </div>
+                  </div>
+                  <div>
+                    <label htmlFor="informe" className="text-sm font-medium">Informe</label>
+                    <Input 
+                      id="informe" 
+                      value={formData.informe || ""} 
+                      onChange={(e) => handleInputChange("informe", e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="flex gap-3 pt-4">
@@ -445,20 +482,20 @@ export default function EntrenamientoPage() {
                 <TableRow className="bg-muted/50">
                   <TableHead
                     className="w-20 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("id")}
+                    onClick={() => handleSort("entrenamientoId")}
                   >
                     <div className="flex items-center">
                       ID
-                      {getSortIcon("id")}
+                      {getSortIcon("entrenamientoId")}
                     </div>
                   </TableHead>
                   <TableHead
                     className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("nombre")}
+                    onClick={() => handleSort("descripcion")}
                   >
                     <div className="flex items-center">
-                      Nombre
-                      {getSortIcon("nombre")}
+                      Descripción
+                      {getSortIcon("descripcion")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -472,69 +509,65 @@ export default function EntrenamientoPage() {
                   </TableHead>
                   <TableHead
                     className="w-24 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("duracion")}
+                    onClick={() => handleSort("fecha")}
                   >
                     <div className="flex items-center">
-                      Duración
-                      {getSortIcon("duracion")}
+                      Fecha
+                      {getSortIcon("fecha")}
                     </div>
                   </TableHead>
                   <TableHead
                     className="w-28 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("nivel")}
+                    onClick={() => handleSort("horaInicio")}
                   >
                     <div className="flex items-center">
-                      Nivel
-                      {getSortIcon("nivel")}
+                      Hora Inicio
+                      {getSortIcon("horaInicio")}
                     </div>
                   </TableHead>
                   <TableHead
                     className="w-24 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("capacidadMaxima")}
+                    onClick={() => handleSort("horaFin")}
                   >
                     <div className="flex items-center">
-                      Capacidad
-                      {getSortIcon("capacidadMaxima")}
+                      Hora Fin
+                      {getSortIcon("horaFin")}
                     </div>
                   </TableHead>
                   <TableHead
-                    className="w-20 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("precio")}
+                    className="w-24 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
+                    onClick={() => handleSort("maxParticipantes")}
                   >
                     <div className="flex items-center">
-                      Precio
-                      {getSortIcon("precio")}
+                      Max Part.
+                      {getSortIcon("maxParticipantes")}
                     </div>
                   </TableHead>
-                  <TableHead
-                    className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("entrenadorNombre")}
-                  >
-                    <div className="flex items-center">
-                      Entrenador
-                      {getSortIcon("entrenadorNombre")}
-                    </div>
-                  </TableHead>
+                  <TableHead className="font-semibold">Entrenador</TableHead>
+                  <TableHead className="font-semibold">Local</TableHead>
                   <TableHead className="w-32 text-center font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginated.map((e) => (
-                  <TableRow key={e.id} className="hover:bg-muted/50 transition-colors">
+                  <TableRow key={e.entrenamientoId} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="font-medium text-muted-foreground">
-                      #{e.id.toString().padStart(3, "0")}
+                      #{e.entrenamientoId?.toString().padStart(3, "0")}
                     </TableCell>
-                    <TableCell className="font-medium">{e.nombre}</TableCell>
+                    <TableCell className="font-medium">{e.descripcion}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{e.tipo}</Badge>
                     </TableCell>
-                    <TableCell>{e.duracion} min</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{e.nivel}</Badge>
+                    <TableCell>{e.fecha}</TableCell>
+                    <TableCell>{e.horaInicio}</TableCell>
+                    <TableCell>{e.horaFin}</TableCell>
+                    <TableCell>{e.maxParticipantes}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {e.entrenador ? `${e.entrenador.nombres} ${e.entrenador.apellidos}` : 'N/A'}
                     </TableCell>
-                    <TableCell>{e.capacidadMaxima}</TableCell>
-                    <TableCell>S/ {e.precio}</TableCell>
-                    <TableCell className="text-muted-foreground">{e.entrenadorNombre}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {e.local ? e.local.nombre : 'N/A'}
+                    </TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -544,25 +577,25 @@ export default function EntrenamientoPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem onClick={() => openEditModal(e.id)} className="cursor-pointer">
+                          <DropdownMenuItem onClick={() => openEditModal(e.entrenamientoId || 0)} className="cursor-pointer">
                             <Edit className="mr-2 h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleEntrenamientoStatus(e.id)} className="cursor-pointer">
-                            {e.active ? (
-                              <>
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Desactivar
-                              </>
-                            ) : (
+                          <DropdownMenuItem onClick={() => toggleEntrenamientoStatus(e.entrenamientoId || 0)} className="cursor-pointer">
+                            {e.descripcion?.includes("Inactivo") ? (
                               <>
                                 <CheckCircle className="mr-2 h-4 w-4" />
                                 Activar
                               </>
+                            ) : (
+                              <>
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Desactivar
+                              </>
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => openDeleteModal(e.id)}
+                            onClick={() => openDeleteModal(e.entrenamientoId || 0)}
                             className="cursor-pointer text-destructive focus:text-destructive"
                           >
                             <Trash2 className="mr-2 text-destructive h-4 w-4" />
@@ -575,7 +608,7 @@ export default function EntrenamientoPage() {
                 ))}
                 {paginated.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-32 text-center">
+                    <TableCell colSpan={10} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Dumbbell className="w-8 h-8" />
                         <p className="text-sm">No se encontraron entrenamientos</p>
@@ -652,14 +685,6 @@ export default function EntrenamientoPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div>
-              <label htmlFor="edit-nombre" className="text-sm font-medium">Nombre</label>
-              <Input 
-                id="edit-nombre" 
-                value={formData.nombre} 
-                onChange={(e) => handleInputChange("nombre", e.target.value)}
-              />
-            </div>
-            <div>
               <label htmlFor="edit-descripcion" className="text-sm font-medium">Descripción</label>
               <Input 
                 id="edit-descripcion" 
@@ -667,56 +692,57 @@ export default function EntrenamientoPage() {
                 onChange={(e) => handleInputChange("descripcion", e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
+                          <div>
                 <label htmlFor="edit-tipo" className="text-sm font-medium">Tipo</label>
                 <Select value={formData.tipo} onValueChange={(value) => handleInputChange("tipo", value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Musculación">Musculación</SelectItem>
-                    <SelectItem value="Cardio">Cardio</SelectItem>
-                    <SelectItem value="Yoga">Yoga</SelectItem>
-                    <SelectItem value="CrossFit">CrossFit</SelectItem>
-                    <SelectItem value="Spinning">Spinning</SelectItem>
-                    <SelectItem value="Pilates">Pilates</SelectItem>
+                    <SelectItem value="Personal">Personal</SelectItem>
+                    <SelectItem value="Grupal">Grupal</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label htmlFor="edit-nivel" className="text-sm font-medium">Nivel</label>
-                <Select value={formData.nivel} onValueChange={(value) => handleInputChange("nivel", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar nivel" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Principiante">Principiante</SelectItem>
-                    <SelectItem value="Intermedio">Intermedio</SelectItem>
-                    <SelectItem value="Avanzado">Avanzado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="edit-duracion" className="text-sm font-medium">Duración (min)</label>
+                <label htmlFor="edit-entrenador" className="text-sm font-medium">Entrenador ID</label>
                 <Input 
-                  id="edit-duracion" 
+                  id="edit-entrenador" 
                   type="number"
-                  value={formData.duracion} 
-                  onChange={(e) => handleInputChange("duracion", parseInt(e.target.value) || 60)}
-                  min="15"
-                  max="180"
+                  value={formData.entrenador?.id || 1} 
+                  onChange={(e) => handleEntrenadorChange(parseInt(e.target.value) || 1)}
+                  min="1"
+                  placeholder="ID del entrenador"
                 />
               </div>
               <div>
-                <label htmlFor="edit-capacidadMaxima" className="text-sm font-medium">Capacidad Máx.</label>
+                <label htmlFor="edit-local" className="text-sm font-medium">Local ID</label>
                 <Input 
-                  id="edit-capacidadMaxima" 
+                  id="edit-local" 
                   type="number"
-                  value={formData.capacidadMaxima} 
-                  onChange={(e) => handleInputChange("capacidadMaxima", parseInt(e.target.value) || 15)}
+                  value={formData.local?.id || 1} 
+                  onChange={(e) => handleLocalChange(parseInt(e.target.value) || 1)}
+                  min="1"
+                  placeholder="ID del local"
+                />
+              </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="edit-fecha" className="text-sm font-medium">Fecha</label>
+                <Input 
+                  id="edit-fecha" 
+                  type="date"
+                  value={formData.fecha} 
+                  onChange={(e) => handleInputChange("fecha", e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-maxParticipantes" className="text-sm font-medium">Max Participantes</label>
+                <Input 
+                  id="edit-maxParticipantes" 
+                  type="number"
+                  value={formData.maxParticipantes} 
+                  onChange={(e) => handleInputChange("maxParticipantes", parseInt(e.target.value) || 10)}
                   min="1"
                   max="50"
                 />
@@ -724,25 +750,31 @@ export default function EntrenamientoPage() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label htmlFor="edit-precio" className="text-sm font-medium">Precio (S/)</label>
+                <label htmlFor="edit-horaInicio" className="text-sm font-medium">Hora Inicio</label>
                 <Input 
-                  id="edit-precio" 
-                  type="number"
-                  value={formData.precio} 
-                  onChange={(e) => handleInputChange("precio", parseInt(e.target.value) || 0)}
-                  min="0"
+                  id="edit-horaInicio" 
+                  type="time"
+                  value={formData.horaInicio} 
+                  onChange={(e) => handleInputChange("horaInicio", e.target.value + ":00")}
                 />
               </div>
               <div>
-                <label htmlFor="edit-entrenadorId" className="text-sm font-medium">Entrenador ID</label>
+                <label htmlFor="edit-horaFin" className="text-sm font-medium">Hora Fin</label>
                 <Input 
-                  id="edit-entrenadorId" 
-                  type="number"
-                  value={formData.entrenadorId} 
-                  onChange={(e) => handleInputChange("entrenadorId", parseInt(e.target.value) || 1)}
-                  min="1"
+                  id="edit-horaFin" 
+                  type="time"
+                  value={formData.horaFin} 
+                  onChange={(e) => handleInputChange("horaFin", e.target.value + ":00")}
                 />
               </div>
+            </div>
+            <div>
+              <label htmlFor="edit-informe" className="text-sm font-medium">Informe</label>
+              <Input 
+                id="edit-informe" 
+                value={formData.informe || ""} 
+                onChange={(e) => handleInputChange("informe", e.target.value)}
+              />
             </div>
           </div>
           <div className="flex gap-3 pt-4">

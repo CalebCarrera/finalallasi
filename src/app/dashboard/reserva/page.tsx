@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { 
   Search, 
   Plus, 
@@ -19,92 +19,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Reserva, ReservaFormData } from "@/services/types/Reserva"
+import { Reserva } from "@/services/types/Reserva"
+import { getReservas, postReserva, putReserva, deleteReserva } from "@/services/api/reserva"
 
-// Datos de ejemplo para reservas
-const reservasData: Reserva[] = [
-  {
-    id: 1,
-    clienteId: 1,
-    clienteNombre: "Juan Pérez",
-    entrenamientoId: 1,
-    entrenamientoNombre: "Musculación Básica",
-    localId: 1,
-    localNombre: "Gym Central",
-    fecha: "2024-01-15",
-    hora: "08:00",
-    estado: "Confirmada",
-    precio: 25,
-    fechaReserva: "2024-01-10",
-    active: true
-  },
-  {
-    id: 2,
-    clienteId: 2,
-    clienteNombre: "María García",
-    entrenamientoId: 2,
-    entrenamientoNombre: "Yoga Flow",
-    localId: 1,
-    localNombre: "Gym Central",
-    fecha: "2024-01-15",
-    hora: "10:00",
-    estado: "Pendiente",
-    precio: 30,
-    fechaReserva: "2024-01-11",
-    active: true
-  },
-  {
-    id: 3,
-    clienteId: 3,
-    clienteNombre: "Carlos López",
-    entrenamientoId: 3,
-    entrenamientoNombre: "CrossFit Intenso",
-    localId: 2,
-    localNombre: "Gym Norte",
-    fecha: "2024-01-16",
-    hora: "07:00",
-    estado: "Confirmada",
-    precio: 35,
-    fechaReserva: "2024-01-12",
-    active: true
-  },
-  {
-    id: 4,
-    clienteId: 4,
-    clienteNombre: "Ana Martínez",
-    entrenamientoId: 4,
-    entrenamientoNombre: "Cardio Dance",
-    localId: 3,
-    localNombre: "Gym Sur",
-    fecha: "2024-01-14",
-    hora: "18:00",
-    estado: "Cancelada",
-    precio: 20,
-    fechaReserva: "2024-01-09",
-    active: false
-  },
-  {
-    id: 5,
-    clienteId: 5,
-    clienteNombre: "Roberto Silva",
-    entrenamientoId: 5,
-    entrenamientoNombre: "Spinning Pro",
-    localId: 4,
-    localNombre: "Gym Este",
-    fecha: "2024-01-17",
-    hora: "19:00",
-    estado: "Completada",
-    precio: 28,
-    fechaReserva: "2024-01-13",
-    active: true
-  }
-]
+// Tipo para el formulario de reserva
+type ReservaFormData = Omit<Reserva, 'reservaId'>;
 
 export default function ReservaPage() {
-  const [reservas, setReservas] = useState<Reserva[]>(reservasData)
+  const [reservas, setReservas] = useState<Reserva[]>([])
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
-  const [sortField, setSortField] = useState<keyof Reserva>("id")
+  const [sortField, setSortField] = useState<keyof Reserva>("reservaId")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [showAdd, setShowAdd] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -113,26 +38,109 @@ export default function ReservaPage() {
 
   const pageSize = 10
 
-  const [formData, setFormData] = useState<ReservaFormData>({
+  // Obtener listas únicas de clientes, entrenamientos y locales
+  const clientes = useMemo(() => {
+    const map = new Map<number, Reserva["cliente"]>()
+    reservas.forEach(r => {
+      if (r.cliente) map.set(r.cliente.clienteId, r.cliente)
+    })
+    return Array.from(map.values())
+  }, [reservas])
+
+  const entrenamientos = useMemo(() => {
+    const map = new Map<number, Reserva["entrenamiento"]>()
+    reservas.forEach(r => {
+      if (r.entrenamiento) map.set(r.entrenamiento.entrenamientoId, r.entrenamiento)
+    })
+    return Array.from(map.values())
+  }, [reservas])
+
+  const locales = useMemo(() => {
+    const map = new Map<number, Reserva["entrenamiento"]["local"]>()
+    reservas.forEach(r => {
+      if (r.entrenamiento?.local) map.set(r.entrenamiento.local.id, r.entrenamiento.local)
+    })
+    return Array.from(map.values())
+  }, [reservas])
+
+  // Valores por defecto después de tener los arrays
+  const defaultCliente = clientes[0] || {
     clienteId: 1,
+    nombres: '',
+    apellidos: '',
+    dni: '',
+    correo: '',
+    telefono: '',
+    fechaInicio: '',
+    fechaFin: '',
+    faltas: 0,
+    planId: 1
+  };
+  const defaultLocal = locales[0] || {
+    id: 1,
+    nombre: '',
+    direccion: '',
+    tipo: '',
+    capacidad: 0,
+    estado: true
+  };
+  const defaultEntrenador = entrenamientos[0]?.entrenador || {
+    id: 1,
+    nombres: '',
+    apellidos: '',
+    dni: '',
+    correo: '',
+    telefono: '',
+    especialidad: '',
+    estado: true
+  };
+  const defaultEntrenamiento = entrenamientos[0] || {
     entrenamientoId: 1,
-    localId: 1,
-    fecha: "",
-    hora: "",
-    estado: "Pendiente",
-    precio: 0
+    tipo: '',
+    fecha: '',
+    horaInicio: '',
+    horaFin: '',
+    maxParticipantes: 0,
+    descripcion: '',
+    informe: null,
+    local: defaultLocal,
+    entrenador: defaultEntrenador
+  };
+
+  const [formData, setFormData] = useState<ReservaFormData>({
+    cliente: defaultCliente,
+    entrenamiento: defaultEntrenamiento,
+    fechaReserva: new Date().toISOString(),
+    asistencia: null,
+    nombreCliente: defaultCliente.nombres,
+    apellidoCliente: defaultCliente.apellidos
   })
+
+  // Cargar reservas al montar el componente
+  useEffect(() => {
+    loadReservas()
+  }, [])
+
+  const loadReservas = async () => {
+    setLoading(true)
+    try {
+      const data = await getReservas()
+      setReservas(data)
+    } catch (error) {
+      console.error("Error loading reservas:", error)
+    }
+    setLoading(false)
+  }
 
   // Filtrar y ordenar reservas
   const filtered = useMemo(() => {
     return reservas.filter((r) => {
       const searchTerm = search.toLowerCase()
       return (
-        r.clienteNombre.toLowerCase().includes(searchTerm) ||
-        r.entrenamientoNombre.toLowerCase().includes(searchTerm) ||
-        r.localNombre.toLowerCase().includes(searchTerm) ||
-        r.fecha.includes(searchTerm) ||
-        r.estado.toLowerCase().includes(searchTerm)
+        ((r.cliente?.nombres + ' ' + r.cliente?.apellidos).toLowerCase().includes(searchTerm)) ||
+        (r.entrenamiento?.tipo?.toLowerCase().includes(searchTerm) || false) ||
+        (r.entrenamiento?.local?.nombre?.toLowerCase().includes(searchTerm) || false) ||
+        (r.fechaReserva?.includes(searchTerm) || false)
       )
     })
   }, [reservas, search])
@@ -178,118 +186,121 @@ export default function ReservaPage() {
     return sortDirection === "asc" ? " ↑" : " ↓"
   }
 
-  const handleInputChange = (field: keyof ReservaFormData, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+  const handleInputChange = (field: keyof ReservaFormData, value: string | number | boolean | any) => {
+    setFormData((prev: ReservaFormData) => ({ ...prev, [field]: value }))
+  }
+
+  const handleClienteChange = (clienteId: number) => {
+    const cliente = clientes.find(c => c.clienteId === clienteId) || defaultCliente
+    setFormData(prev => ({
+      ...prev,
+      cliente
+    }))
+  }
+
+  const handleEntrenamientoChange = (entrenamientoId: number) => {
+    const entrenamiento = entrenamientos.find(e => e.entrenamientoId === entrenamientoId) || defaultEntrenamiento
+    setFormData(prev => ({
+      ...prev,
+      entrenamiento
+    }))
+  }
+
+  const handleLocalChange = (localId: number) => {
+    const local = locales.find(l => l.id === localId) || defaultLocal
+    setFormData(prev => ({
+      ...prev,
+      entrenamiento: {
+        ...prev.entrenamiento,
+        local
+      }
+    }))
   }
 
   const resetForm = () => {
     setFormData({
-      clienteId: 1,
-      entrenamientoId: 1,
-      localId: 1,
-      fecha: "",
-      hora: "",
-      estado: "Pendiente",
-      precio: 0
+      cliente: defaultCliente,
+      entrenamiento: defaultEntrenamiento,
+      fechaReserva: new Date().toISOString(),
+      asistencia: null,
+      nombreCliente: defaultCliente.nombres,
+      apellidoCliente: defaultCliente.apellidos
     })
   }
 
   const handleAddReserva = async () => {
-    if (!formData.fecha || !formData.hora) {
+    if (!formData.fechaReserva || !formData.cliente?.clienteId || !formData.entrenamiento?.entrenamientoId) {
       alert("Por favor completa los campos obligatorios")
       return
     }
 
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    const cliente = reservas.find(r => r.clienteId === formData.clienteId)
-    const entrenamiento = reservas.find(r => r.entrenamientoId === formData.entrenamientoId)
-    const local = reservas.find(r => r.localId === formData.localId)
-
-    const newReserva: Reserva = {
-      id: Math.max(...reservas.map(r => r.id)) + 1,
-      ...formData,
-      clienteNombre: cliente?.clienteNombre || "Cliente",
-      entrenamientoNombre: entrenamiento?.entrenamientoNombre || "Entrenamiento",
-      localNombre: local?.localNombre || "Local",
-      fechaReserva: new Date().toISOString().split('T')[0],
-      active: true
+    const result = await postReserva(formData)
+    if (result) {
+      setReservas(prev => [...prev, result])
+      setShowAdd(false)
+      resetForm()
+    } else {
+      alert("Error al guardar la reserva")
     }
-
-    setReservas(prev => [...prev, newReserva])
-    setShowAdd(false)
-    resetForm()
     setLoading(false)
   }
 
   const openEditModal = (id: number) => {
-    const reserva = reservas.find(r => r.id === id)
+    const reserva = reservas.find(r => r.reservaId === id)
     if (reserva) {
       setFormData({
-        clienteId: reserva.clienteId,
-        entrenamientoId: reserva.entrenamientoId,
-        localId: reserva.localId,
-        fecha: reserva.fecha,
-        hora: reserva.hora,
-        estado: reserva.estado,
-        precio: reserva.precio
+        cliente: reserva.cliente,
+        entrenamiento: reserva.entrenamiento,
+        fechaReserva: reserva.fechaReserva,
+        asistencia: reserva.asistencia,
+        nombreCliente: reserva.cliente.nombres,
+        apellidoCliente: reserva.cliente.apellidos
       })
       setEditModal({ open: true, id })
     }
   }
 
   const handleEditSave = async () => {
-    if (!formData.fecha || !formData.hora) {
+    if (!formData.fechaReserva || !formData.cliente?.clienteId || !formData.entrenamiento?.entrenamientoId) {
       alert("Por favor completa los campos obligatorios")
       return
     }
 
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    const cliente = reservas.find(r => r.clienteId === formData.clienteId)
-    const entrenamiento = reservas.find(r => r.entrenamientoId === formData.entrenamientoId)
-    const local = reservas.find(r => r.localId === formData.localId)
-
-    setReservas(prev => 
-      prev.map(r => 
-        r.id === editModal.id 
-          ? { 
-              ...r, 
-              ...formData,
-              clienteNombre: cliente?.clienteNombre || r.clienteNombre,
-              entrenamientoNombre: entrenamiento?.entrenamientoNombre || r.entrenamientoNombre,
-              localNombre: local?.localNombre || r.localNombre
-            }
-          : r
+    const result = await putReserva({ ...formData, reservaId: editModal.id })
+    if (result) {
+      setReservas(prev => 
+        prev.map(r => r.reservaId === result.reservaId ? result : r)
       )
-    )
-    setEditModal({ open: false, id: 0 })
-    resetForm()
+      setEditModal({ open: false, id: 0 })
+      resetForm()
+    } else {
+      alert("Error al actualizar la reserva")
+    }
     setLoading(false)
   }
 
   const openDeleteModal = (id: number) => {
-    const reserva = reservas.find(r => r.id === id)
+    const reserva = reservas.find(r => r.reservaId === id)
     if (reserva) {
       setDeleteModal({ 
         open: true, 
         id, 
-        name: `${reserva.clienteNombre} - ${reserva.entrenamientoNombre}` 
+        name: `${reserva.cliente?.nombres || ''} ${reserva.cliente?.apellidos || ''} - ${reserva.entrenamiento?.tipo || 'Entrenamiento'}` 
       })
     }
   }
 
   const handleDelete = async (id: number) => {
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    setReservas(prev => prev.filter(r => r.id !== id))
-    setDeleteModal({ open: false, id: 0, name: "" })
+    const success = await deleteReserva(id)
+    if (success) {
+      setReservas(prev => prev.filter(r => r.reservaId !== id))
+      setDeleteModal({ open: false, id: 0, name: "" })
+    } else {
+      alert("Error al eliminar la reserva")
+    }
     setLoading(false)
   }
 
@@ -300,26 +311,21 @@ export default function ReservaPage() {
 
     setReservas(prev => 
       prev.map(r => 
-        r.id === id 
-          ? { ...r, active: !r.active }
+        r.reservaId === id 
+          ? { ...r, asistencia: !r.asistencia }
           : r
       )
     )
     setLoading(false)
   }
 
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case "Confirmada":
-        return <Badge variant="default" className="bg-green-500">Confirmada</Badge>
-      case "Pendiente":
-        return <Badge variant="secondary" className="bg-yellow-500">Pendiente</Badge>
-      case "Cancelada":
-        return <Badge variant="destructive">Cancelada</Badge>
-      case "Completada":
-        return <Badge variant="outline" className="bg-blue-500">Completada</Badge>
-      default:
-        return <Badge variant="outline">{estado}</Badge>
+  const getAsistenciaBadge = (asistencia: boolean | null) => {
+    if (asistencia === null) {
+      return <Badge variant="secondary" className="bg-gray-500">Pendiente</Badge>
+    } else if (asistencia) {
+      return <Badge variant="default" className="bg-green-500">Asistió</Badge>
+    } else {
+      return <Badge variant="destructive">No Asistió</Badge>
     }
   }
 
@@ -368,81 +374,84 @@ export default function ReservaPage() {
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label htmlFor="clienteId" className="text-sm font-medium">Cliente ID</label>
-                      <Input 
-                        id="clienteId" 
-                        type="number"
-                        value={formData.clienteId} 
-                        onChange={(e) => handleInputChange("clienteId", parseInt(e.target.value) || 1)}
-                        min="1"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="entrenamientoId" className="text-sm font-medium">Entrenamiento ID</label>
-                      <Input 
-                        id="entrenamientoId" 
-                        type="number"
-                        value={formData.entrenamientoId} 
-                        onChange={(e) => handleInputChange("entrenamientoId", parseInt(e.target.value) || 1)}
-                        min="1"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="localId" className="text-sm font-medium">Local ID</label>
-                    <Input 
-                      id="localId" 
-                      type="number"
-                      value={formData.localId} 
-                      onChange={(e) => handleInputChange("localId", parseInt(e.target.value) || 1)}
-                      min="1"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label htmlFor="fecha" className="text-sm font-medium">Fecha</label>
-                      <Input 
-                        id="fecha" 
-                        type="date"
-                        value={formData.fecha} 
-                        onChange={(e) => handleInputChange("fecha", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="hora" className="text-sm font-medium">Hora</label>
-                      <Input 
-                        id="hora" 
-                        type="time"
-                        value={formData.hora} 
-                        onChange={(e) => handleInputChange("hora", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label htmlFor="estado" className="text-sm font-medium">Estado</label>
-                      <Select value={formData.estado} onValueChange={(value) => handleInputChange("estado", value)}>
+                      <label htmlFor="clienteId" className="text-sm font-medium">Cliente</label>
+                      <Select
+                        value={formData.cliente?.clienteId ? String(formData.cliente.clienteId) : ""}
+                        onValueChange={v => handleClienteChange(Number(v))}
+                      >
                         <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar estado" />
+                          <SelectValue placeholder="Seleccionar cliente" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Pendiente">Pendiente</SelectItem>
-                          <SelectItem value="Confirmada">Confirmada</SelectItem>
-                          <SelectItem value="Cancelada">Cancelada</SelectItem>
-                          <SelectItem value="Completada">Completada</SelectItem>
+                          {clientes.map(c => (
+                            <SelectItem key={c.clienteId} value={String(c.clienteId)}>
+                              {c.nombres} {c.apellidos}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="precio" className="text-sm font-medium">Precio (S/)</label>
-                      <Input 
-                        id="precio" 
-                        type="number"
-                        value={formData.precio} 
-                        onChange={(e) => handleInputChange("precio", parseInt(e.target.value) || 0)}
-                        min="0"
-                      />
+                      <label htmlFor="entrenamientoId" className="text-sm font-medium">Entrenamiento</label>
+                      <Select
+                        value={formData.entrenamiento?.entrenamientoId ? String(formData.entrenamiento.entrenamientoId) : ""}
+                        onValueChange={v => handleEntrenamientoChange(Number(v))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar entrenamiento" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {entrenamientos.map(e => (
+                            <SelectItem key={e.entrenamientoId} value={String(e.entrenamientoId)}>
+                              {e.tipo}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+                  </div>
+                  <div>
+                    <label htmlFor="localId" className="text-sm font-medium">Local</label>
+                    <Select
+                      value={formData.entrenamiento?.local?.id ? String(formData.entrenamiento.local.id) : ""}
+                      onValueChange={v => handleLocalChange(Number(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar local" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locales.map(l => (
+                          <SelectItem key={l.id} value={String(l.id)}>
+                            {l.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label htmlFor="fechaReserva" className="text-sm font-medium">Fecha de Reserva</label>
+                    <Input 
+                      id="fechaReserva" 
+                      type="datetime-local"
+                      value={formData.fechaReserva ? formData.fechaReserva.slice(0, 16) : ""} 
+                      onChange={(e) => handleInputChange("fechaReserva", e.target.value + ":00")}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="asistencia" className="text-sm font-medium">Asistencia</label>
+                    <Select 
+                      value={formData.asistencia === null ? "null" : formData.asistencia.toString()} 
+                      onValueChange={(value) => handleInputChange("asistencia", value === "null" ? null : value === "true")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar asistencia" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="null">Pendiente</SelectItem>
+                        <SelectItem value="true">Asistió</SelectItem>
+                        <SelectItem value="false">No Asistió</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="flex gap-3 pt-4">
@@ -466,76 +475,16 @@ export default function ReservaPage() {
                 <TableRow className="bg-muted/50">
                   <TableHead
                     className="w-20 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("id")}
+                    onClick={() => handleSort("reservaId")}
                   >
                     <div className="flex items-center">
                       ID
-                      {getSortIcon("id")}
+                      {getSortIcon("reservaId")}
                     </div>
                   </TableHead>
-                  <TableHead
-                    className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("clienteNombre")}
-                  >
-                    <div className="flex items-center">
-                      Cliente
-                      {getSortIcon("clienteNombre")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("entrenamientoNombre")}
-                  >
-                    <div className="flex items-center">
-                      Entrenamiento
-                      {getSortIcon("entrenamientoNombre")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("localNombre")}
-                  >
-                    <div className="flex items-center">
-                      Local
-                      {getSortIcon("localNombre")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-32 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("fecha")}
-                  >
-                    <div className="flex items-center">
-                      Fecha
-                      {getSortIcon("fecha")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-24 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("hora")}
-                  >
-                    <div className="flex items-center">
-                      Hora
-                      {getSortIcon("hora")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-28 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("estado")}
-                  >
-                    <div className="flex items-center">
-                      Estado
-                      {getSortIcon("estado")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-20 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("precio")}
-                  >
-                    <div className="flex items-center">
-                      Precio
-                      {getSortIcon("precio")}
-                    </div>
-                  </TableHead>
+                  <TableHead className="font-semibold">Cliente</TableHead>
+                  <TableHead className="font-semibold">Entrenamiento</TableHead>
+                  <TableHead className="font-semibold">Local</TableHead>
                   <TableHead
                     className="w-32 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
                     onClick={() => handleSort("fechaReserva")}
@@ -545,23 +494,27 @@ export default function ReservaPage() {
                       {getSortIcon("fechaReserva")}
                     </div>
                   </TableHead>
+                  <TableHead className="w-28 font-semibold">Asistencia</TableHead>
                   <TableHead className="w-32 text-center font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginated.map((r) => (
-                  <TableRow key={r.id} className="hover:bg-muted/50 transition-colors">
+                  <TableRow key={r.reservaId} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="font-medium text-muted-foreground">
-                      #{r.id.toString().padStart(3, "0")}
+                      #{r.reservaId?.toString().padStart(3, "0")}
                     </TableCell>
-                    <TableCell className="font-medium">{r.clienteNombre}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.entrenamientoNombre}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.localNombre}</TableCell>
-                    <TableCell>{r.fecha}</TableCell>
-                    <TableCell>{r.hora}</TableCell>
-                    <TableCell>{getEstadoBadge(r.estado)}</TableCell>
-                    <TableCell>S/ {r.precio}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.fechaReserva}</TableCell>
+                    <TableCell className="font-medium">{r.cliente ? `${r.cliente.nombres} ${r.cliente.apellidos}` : 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.entrenamiento?.tipo || 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.entrenamiento?.local?.nombre || 'N/A'}</TableCell>
+                    <TableCell>{r.fechaReserva ? new Date(r.fechaReserva).toLocaleString('es-ES', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) : 'N/A'}</TableCell>
+                    <TableCell>{getAsistenciaBadge(r.asistencia)}</TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -571,25 +524,30 @@ export default function ReservaPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem onClick={() => openEditModal(r.id)} className="cursor-pointer">
+                          <DropdownMenuItem onClick={() => openEditModal(r.reservaId || 0)} className="cursor-pointer">
                             <Edit className="mr-2 h-4 w-4" />
                             Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleReservaStatus(r.id)} className="cursor-pointer">
-                            {r.active ? (
+                          <DropdownMenuItem onClick={() => toggleReservaStatus(r.reservaId || 0)} className="cursor-pointer">
+                            {r.asistencia === null ? (
+                              <>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Marcar Asistió
+                              </>
+                            ) : r.asistencia ? (
                               <>
                                 <XCircle className="mr-2 h-4 w-4" />
-                                Desactivar
+                                Marcar No Asistió
                               </>
                             ) : (
                               <>
                                 <CheckCircle className="mr-2 h-4 w-4" />
-                                Activar
+                                Marcar Asistió
                               </>
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => openDeleteModal(r.id)}
+                            onClick={() => openDeleteModal(r.reservaId || 0)}
                             className="cursor-pointer text-destructive focus:text-destructive"
                           >
                             <Trash2 className="mr-2 text-destructive h-4 w-4" />
@@ -602,7 +560,7 @@ export default function ReservaPage() {
                 ))}
                 {paginated.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-32 text-center">
+                    <TableCell colSpan={6} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Calendar className="w-8 h-8" />
                         <p className="text-sm">No se encontraron reservas</p>
@@ -680,81 +638,84 @@ export default function ReservaPage() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label htmlFor="edit-clienteId" className="text-sm font-medium">Cliente ID</label>
-                <Input 
-                  id="edit-clienteId" 
-                  type="number"
-                  value={formData.clienteId} 
-                  onChange={(e) => handleInputChange("clienteId", parseInt(e.target.value) || 1)}
-                  min="1"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-entrenamientoId" className="text-sm font-medium">Entrenamiento ID</label>
-                <Input 
-                  id="edit-entrenamientoId" 
-                  type="number"
-                  value={formData.entrenamientoId} 
-                  onChange={(e) => handleInputChange("entrenamientoId", parseInt(e.target.value) || 1)}
-                  min="1"
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="edit-localId" className="text-sm font-medium">Local ID</label>
-              <Input 
-                id="edit-localId" 
-                type="number"
-                value={formData.localId} 
-                onChange={(e) => handleInputChange("localId", parseInt(e.target.value) || 1)}
-                min="1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="edit-fecha" className="text-sm font-medium">Fecha</label>
-                <Input 
-                  id="edit-fecha" 
-                  type="date"
-                  value={formData.fecha} 
-                  onChange={(e) => handleInputChange("fecha", e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-hora" className="text-sm font-medium">Hora</label>
-                <Input 
-                  id="edit-hora" 
-                  type="time"
-                  value={formData.hora} 
-                  onChange={(e) => handleInputChange("hora", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="edit-estado" className="text-sm font-medium">Estado</label>
-                <Select value={formData.estado} onValueChange={(value) => handleInputChange("estado", value)}>
+                <label htmlFor="edit-clienteId" className="text-sm font-medium">Cliente</label>
+                <Select
+                  value={formData.cliente?.clienteId ? String(formData.cliente.clienteId) : ""}
+                  onValueChange={v => handleClienteChange(Number(v))}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar estado" />
+                    <SelectValue placeholder="Seleccionar cliente" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Pendiente">Pendiente</SelectItem>
-                    <SelectItem value="Confirmada">Confirmada</SelectItem>
-                    <SelectItem value="Cancelada">Cancelada</SelectItem>
-                    <SelectItem value="Completada">Completada</SelectItem>
+                    {clientes.map(c => (
+                      <SelectItem key={c.clienteId} value={String(c.clienteId)}>
+                        {c.nombres} {c.apellidos}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label htmlFor="edit-precio" className="text-sm font-medium">Precio (S/)</label>
-                <Input 
-                  id="edit-precio" 
-                  type="number"
-                  value={formData.precio} 
-                  onChange={(e) => handleInputChange("precio", parseInt(e.target.value) || 0)}
-                  min="0"
-                />
+                <label htmlFor="edit-entrenamientoId" className="text-sm font-medium">Entrenamiento</label>
+                <Select
+                  value={formData.entrenamiento?.entrenamientoId ? String(formData.entrenamiento.entrenamientoId) : ""}
+                  onValueChange={v => handleEntrenamientoChange(Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar entrenamiento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {entrenamientos.map(e => (
+                      <SelectItem key={e.entrenamientoId} value={String(e.entrenamientoId)}>
+                        {e.tipo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+            <div>
+              <label htmlFor="localId" className="text-sm font-medium">Local</label>
+              <Select
+                value={formData.entrenamiento?.local?.id ? String(formData.entrenamiento.local.id) : ""}
+                onValueChange={v => handleLocalChange(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar local" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locales.map(l => (
+                    <SelectItem key={l.id} value={String(l.id)}>
+                      {l.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="edit-fechaReserva" className="text-sm font-medium">Fecha de Reserva</label>
+              <Input 
+                id="edit-fechaReserva" 
+                type="datetime-local"
+                value={formData.fechaReserva ? formData.fechaReserva.slice(0, 16) : ""} 
+                onChange={(e) => handleInputChange("fechaReserva", e.target.value + ":00")}
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-asistencia" className="text-sm font-medium">Asistencia</label>
+              <Select 
+                value={formData.asistencia === null ? "null" : formData.asistencia.toString()} 
+                onValueChange={(value) => handleInputChange("asistencia", value === "null" ? null : value === "true")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar asistencia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Pendiente</SelectItem>
+                  <SelectItem value="true">Asistió</SelectItem>
+                  <SelectItem value="false">No Asistió</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex gap-3 pt-4">
