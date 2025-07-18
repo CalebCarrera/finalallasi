@@ -2,24 +2,15 @@ export interface Local {
   id: number;
   nombre: string;
   direccion: string;
-  distrito: string;
-  telefono: string;
+  tipo: string;
   capacidad: number;
-  horarioApertura: string;
-  horarioCierre: string;
-  estado: string; // "Activo", "Mantenimiento", "Cerrado"
-  encargado: string;
-  active: boolean;
+  estado: boolean;
 }
 
 export interface LocalFormData {
   nombre: string;
   direccion: string;
-  distrito: string;
-  telefono: string;
+  tipo: string;
   capacidad: number;
-  horarioApertura: string;
-  horarioCierre: string;
-  estado: string;
-  encargado: string;
+  estado: boolean;
 } 

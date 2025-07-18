@@ -6,9 +6,17 @@ export interface Entrenador {
   correo: string;
   telefono: string;
   especialidad: string;
-  experiencia: number; // años de experiencia
-  fechaContratacion: string;
-  salario: number;
+  estado: boolean;
+}
+
+// Interface for UI entrenador data (mapped from API response)
+export interface EntrenadorUI {
+  id: number;
+  name: string;
+  email: string;
+  dni: string;
+  telefono: string;
+  especialidad: string;
   active: boolean;
 }
 
@@ -19,7 +27,4 @@ export interface EntrenadorFormData {
   correo: string;
   telefono: string;
   especialidad: string;
-  experiencia: number;
-  fechaContratacion: string;
-  salario: number;
 } 

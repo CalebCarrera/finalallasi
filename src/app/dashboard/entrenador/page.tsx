@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect} from "react"
 import { 
   Search, 
   Plus, 
@@ -18,82 +18,14 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Entrenador, EntrenadorFormData } from "@/services/types/Entrenador"
-
-// Datos de ejemplo para entrenadores
-const entrenadoresData: Entrenador[] = [
-  {
-    id: 1,
-    nombres: "Carlos",
-    apellidos: "García",
-    dni: "12345678",
-    correo: "carlos.garcia@gym.com",
-    telefono: "+51 999 111 111",
-    especialidad: "Musculación",
-    experiencia: 5,
-    fechaContratacion: "2020-01-15",
-    salario: 2500,
-    active: true
-  },
-  {
-    id: 2,
-    nombres: "Ana",
-    apellidos: "Martínez",
-    dni: "87654321",
-    correo: "ana.martinez@gym.com",
-    telefono: "+51 999 222 222",
-    especialidad: "Yoga",
-    experiencia: 3,
-    fechaContratacion: "2021-03-20",
-    salario: 2200,
-    active: true
-  },
-  {
-    id: 3,
-    nombres: "Luis",
-    apellidos: "Rodríguez",
-    dni: "11223344",
-    correo: "luis.rodriguez@gym.com",
-    telefono: "+51 999 333 333",
-    especialidad: "CrossFit",
-    experiencia: 7,
-    fechaContratacion: "2018-06-10",
-    salario: 2800,
-    active: true
-  },
-  {
-    id: 4,
-    nombres: "María",
-    apellidos: "López",
-    dni: "44332211",
-    correo: "maria.lopez@gym.com",
-    telefono: "+51 999 444 444",
-    especialidad: "Pilates",
-    experiencia: 4,
-    fechaContratacion: "2020-09-05",
-    salario: 2300,
-    active: false
-  },
-  {
-    id: 5,
-    nombres: "Roberto",
-    apellidos: "Hernández",
-    dni: "55667788",
-    correo: "roberto.hernandez@gym.com",
-    telefono: "+51 999 555 555",
-    especialidad: "Spinning",
-    experiencia: 6,
-    fechaContratacion: "2019-02-12",
-    salario: 2400,
-    active: true
-  }
-]
+import { EntrenadorFormData, EntrenadorUI } from "@/services/types/Entrenador"
+import { getEntrenadores, postEntrenador, putEntrenador, deleteEntrenador } from "@/services/api/entrenador/api" 
 
 export default function EntrenadorPage() {
-  const [entrenadores, setEntrenadores] = useState<Entrenador[]>(entrenadoresData)
+  const [entrenadores, setEntrenadores] = useState<EntrenadorUI[]>([])
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
-  const [sortField, setSortField] = useState<keyof Entrenador>("id")
+  const [sortField, setSortField] = useState<keyof EntrenadorUI>("id")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [showAdd, setShowAdd] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -108,10 +40,7 @@ export default function EntrenadorPage() {
     dni: "",
     correo: "",
     telefono: "",
-    especialidad: "",
-    experiencia: 0,
-    fechaContratacion: "",
-    salario: 0
+    especialidad: ""
   })
 
   // Filtrar y ordenar entrenadores
@@ -119,9 +48,8 @@ export default function EntrenadorPage() {
     return entrenadores.filter((e) => {
       const searchTerm = search.toLowerCase()
       return (
-        e.nombres.toLowerCase().includes(searchTerm) ||
-        e.apellidos.toLowerCase().includes(searchTerm) ||
-        e.correo.toLowerCase().includes(searchTerm) ||
+        e.name.toLowerCase().includes(searchTerm) ||
+        e.email.toLowerCase().includes(searchTerm) ||
         e.dni.includes(searchTerm) ||
         e.especialidad.toLowerCase().includes(searchTerm)
       )
@@ -130,8 +58,8 @@ export default function EntrenadorPage() {
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      const aValue = a[sortField]
-      const bValue = b[sortField]
+      const aValue = a[sortField as keyof EntrenadorUI]
+      const bValue = b[sortField as keyof EntrenadorUI]
       
       if (typeof aValue === "string" && typeof bValue === "string") {
         return sortDirection === "asc" 
@@ -155,7 +83,7 @@ export default function EntrenadorPage() {
   const totalPages = Math.ceil(sorted.length / pageSize)
 
   // Funciones de manejo
-  const handleSort = (field: keyof Entrenador) => {
+  const handleSort = (field: keyof EntrenadorUI) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc")
     } else {
@@ -164,7 +92,7 @@ export default function EntrenadorPage() {
     }
   }
 
-  const getSortIcon = (field: keyof Entrenador) => {
+  const getSortIcon = (field: keyof EntrenadorUI) => {
     if (sortField !== field) return null
     return sortDirection === "asc" ? " ↑" : " ↓"
   }
@@ -180,10 +108,7 @@ export default function EntrenadorPage() {
       dni: "",
       correo: "",
       telefono: "",
-      especialidad: "",
-      experiencia: 0,
-      fechaContratacion: "",
-      salario: 0
+      especialidad: ""
     })
   }
 
@@ -194,34 +119,54 @@ export default function EntrenadorPage() {
     }
 
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    try {
+      const newEntrenadorData = {
+        nombres: formData.nombres,
+        apellidos: formData.apellidos,
+        dni: formData.dni,
+        correo: formData.correo,
+        telefono: formData.telefono,
+        especialidad: formData.especialidad,
+        estado: true
+      }
 
-    const newEntrenador: Entrenador = {
-      id: Math.max(...entrenadores.map(e => e.id)) + 1,
-      ...formData,
-      active: true
+      const result = await postEntrenador(newEntrenadorData)
+      if (result) {
+        const newEntrenadorUI: EntrenadorUI = {
+          id: result.id,
+          name: `${result.nombres} ${result.apellidos}`,
+          email: result.correo,
+          dni: result.dni,
+          telefono: result.telefono,
+          especialidad: result.especialidad,
+          active: result.estado
+        }
+        setEntrenadores(prev => [...prev, newEntrenadorUI])
+        setShowAdd(false)
+        resetForm()
+      }
+    } catch (error) {
+      console.error("Error adding entrenador:", error)
+    } finally {
+      setLoading(false)
     }
-
-    setEntrenadores(prev => [...prev, newEntrenador])
-    setShowAdd(false)
-    resetForm()
-    setLoading(false)
   }
 
   const openEditModal = (id: number) => {
     const entrenador = entrenadores.find(e => e.id === id)
     if (entrenador) {
+      // Parse name back to nombres and apellidos
+      const nameParts = entrenador.name.split(' ')
+      const nombres = nameParts[0] || ""
+      const apellidos = nameParts.slice(1).join(' ') || ""
+      
       setFormData({
-        nombres: entrenador.nombres,
-        apellidos: entrenador.apellidos,
+        nombres,
+        apellidos,
         dni: entrenador.dni,
-        correo: entrenador.correo,
+        correo: entrenador.email,
         telefono: entrenador.telefono,
-        especialidad: entrenador.especialidad,
-        experiencia: entrenador.experiencia,
-        fechaContratacion: entrenador.fechaContratacion,
-        salario: entrenador.salario
+        especialidad: entrenador.especialidad
       })
       setEditModal({ open: true, id })
     }
@@ -234,19 +179,43 @@ export default function EntrenadorPage() {
     }
 
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    try {
+      const updatedEntrenadorData = {
+        id: editModal.id,
+        nombres: formData.nombres,
+        apellidos: formData.apellidos,
+        dni: formData.dni,
+        correo: formData.correo,
+        telefono: formData.telefono,
+        especialidad: formData.especialidad,
+        estado: true
+      }
 
-    setEntrenadores(prev => 
-      prev.map(e => 
-        e.id === editModal.id 
-          ? { ...e, ...formData }
-          : e
-      )
-    )
-    setEditModal({ open: false, id: 0 })
-    resetForm()
-    setLoading(false)
+      const result = await putEntrenador(updatedEntrenadorData)
+      if (result) {
+        setEntrenadores(prev => 
+          prev.map(e => 
+            e.id === editModal.id 
+              ? {
+                  id: result.id,
+                  name: `${result.nombres} ${result.apellidos}`,
+                  email: result.correo,
+                  dni: result.dni,
+                  telefono: result.telefono,
+                  especialidad: result.especialidad,
+                  active: result.estado
+                }
+              : e
+          )
+        )
+        setEditModal({ open: false, id: 0 })
+        resetForm()
+      }
+    } catch (error) {
+      console.error("Error updating entrenador:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openDeleteModal = (id: number) => {
@@ -255,26 +224,27 @@ export default function EntrenadorPage() {
       setDeleteModal({ 
         open: true, 
         id, 
-        name: `${entrenador.nombres} ${entrenador.apellidos}` 
+        name: entrenador.name
       })
     }
   }
 
   const handleDelete = async (id: number) => {
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    setEntrenadores(prev => prev.filter(e => e.id !== id))
-    setDeleteModal({ open: false, id: 0, name: "" })
-    setLoading(false)
+    try {
+      const success = await deleteEntrenador(id)
+      if (success) {
+        setEntrenadores(prev => prev.filter(e => e.id !== id))
+        setDeleteModal({ open: false, id: 0, name: "" })
+      }
+    } catch (error) {
+      console.error("Error deleting entrenador:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const toggleEntrenadorStatus = async (id: number) => {
-    setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 500))
-
+  const toggleEntrenadorStatus = (id: number) => {
     setEntrenadores(prev => 
       prev.map(e => 
         e.id === id 
@@ -282,8 +252,35 @@ export default function EntrenadorPage() {
           : e
       )
     )
-    setLoading(false)
   }
+
+    useEffect(() => {
+    async function fetchEntrenadores() {
+      setLoading(true)
+      try {
+        const data = await getEntrenadores()
+        if (data) {
+          const mapped = data.map((e) => ({
+            id: e.id,
+            name: `${e.nombres} ${e.apellidos}`,
+            email: e.correo,
+            dni: e.dni,
+            telefono: e.telefono,
+            especialidad: e.especialidad,
+            active: e.estado
+          }))
+          setEntrenadores(mapped)
+        }
+      } catch (error) {
+        console.error("Error fetching entrenadores:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchEntrenadores()
+  }, [])
+
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -385,37 +382,6 @@ export default function EntrenadorPage() {
                       placeholder="Musculación"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label htmlFor="experiencia" className="text-sm font-medium">Experiencia (años)</label>
-                      <Input 
-                        id="experiencia" 
-                        type="number"
-                        value={formData.experiencia} 
-                        onChange={(e) => handleInputChange("experiencia", parseInt(e.target.value) || 0)}
-                        min="0"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="salario" className="text-sm font-medium">Salario (S/)</label>
-                      <Input 
-                        id="salario" 
-                        type="number"
-                        value={formData.salario} 
-                        onChange={(e) => handleInputChange("salario", parseInt(e.target.value) || 0)}
-                        min="0"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="fechaContratacion" className="text-sm font-medium">Fecha Contratación</label>
-                    <Input 
-                      id="fechaContratacion" 
-                      type="date"
-                      value={formData.fechaContratacion} 
-                      onChange={(e) => handleInputChange("fechaContratacion", e.target.value)}
-                    />
-                  </div>
                 </div>
                 <div className="flex gap-3 pt-4">
                   <Button onClick={handleAddEntrenador} disabled={loading} className="flex-1">
@@ -447,20 +413,20 @@ export default function EntrenadorPage() {
                   </TableHead>
                   <TableHead
                     className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("nombres")}
+                    onClick={() => handleSort("name")}
                   >
                     <div className="flex items-center">
                       Nombre
-                      {getSortIcon("nombres")}
+                      {getSortIcon("name")}
                     </div>
                   </TableHead>
                   <TableHead
                     className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("correo")}
+                    onClick={() => handleSort("email")}
                   >
                     <div className="flex items-center">
                       Email
-                      {getSortIcon("correo")}
+                      {getSortIcon("email")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -490,33 +456,6 @@ export default function EntrenadorPage() {
                       {getSortIcon("especialidad")}
                     </div>
                   </TableHead>
-                  <TableHead
-                    className="w-24 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("experiencia")}
-                  >
-                    <div className="flex items-center">
-                      Exp. (años)
-                      {getSortIcon("experiencia")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-32 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("fechaContratacion")}
-                  >
-                    <div className="flex items-center">
-                      Contratación
-                      {getSortIcon("fechaContratacion")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-24 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("salario")}
-                  >
-                    <div className="flex items-center">
-                      Salario
-                      {getSortIcon("salario")}
-                    </div>
-                  </TableHead>
                   <TableHead className="w-32 text-center font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -526,14 +465,11 @@ export default function EntrenadorPage() {
                     <TableCell className="font-medium text-muted-foreground">
                       #{e.id.toString().padStart(3, "0")}
                     </TableCell>
-                    <TableCell className="font-medium">{e.nombres} {e.apellidos}</TableCell>
-                    <TableCell className="text-muted-foreground">{e.correo}</TableCell>
+                    <TableCell className="font-medium">{e.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{e.email}</TableCell>
                     <TableCell>{e.dni}</TableCell>
                     <TableCell>{e.telefono}</TableCell>
                     <TableCell>{e.especialidad}</TableCell>
-                    <TableCell>{e.experiencia}</TableCell>
-                    <TableCell>{e.fechaContratacion}</TableCell>
-                    <TableCell>S/ {e.salario.toLocaleString()}</TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -699,37 +635,6 @@ export default function EntrenadorPage() {
                 id="edit-especialidad" 
                 value={formData.especialidad} 
                 onChange={(e) => handleInputChange("especialidad", e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="edit-experiencia" className="text-sm font-medium">Experiencia (años)</label>
-                <Input 
-                  id="edit-experiencia" 
-                  type="number"
-                  value={formData.experiencia} 
-                  onChange={(e) => handleInputChange("experiencia", parseInt(e.target.value) || 0)}
-                  min="0"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-salario" className="text-sm font-medium">Salario (S/)</label>
-                <Input 
-                  id="edit-salario" 
-                  type="number"
-                  value={formData.salario} 
-                  onChange={(e) => handleInputChange("salario", parseInt(e.target.value) || 0)}
-                  min="0"
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="edit-fechaContratacion" className="text-sm font-medium">Fecha Contratación</label>
-              <Input 
-                id="edit-fechaContratacion" 
-                type="date"
-                value={formData.fechaContratacion} 
-                onChange={(e) => handleInputChange("fechaContratacion", e.target.value)}
               />
             </div>
           </div>

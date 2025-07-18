@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { 
   Search, 
   Plus, 
@@ -20,78 +20,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Local, LocalFormData } from "@/services/types/Local"
-
-// Datos de ejemplo para locales
-const localesData: Local[] = [
-  {
-    id: 1,
-    nombre: "Gym Central",
-    direccion: "Av. Arequipa 123",
-    distrito: "Miraflores",
-    telefono: "+51 1 444-0001",
-    capacidad: 150,
-    horarioApertura: "06:00",
-    horarioCierre: "23:00",
-    estado: "Activo",
-    encargado: "Juan Pérez",
-    active: true
-  },
-  {
-    id: 2,
-    nombre: "Gym Norte",
-    direccion: "Av. Javier Prado 456",
-    distrito: "San Isidro",
-    telefono: "+51 1 444-0002",
-    capacidad: 120,
-    horarioApertura: "05:30",
-    horarioCierre: "22:30",
-    estado: "Activo",
-    encargado: "María García",
-    active: true
-  },
-  {
-    id: 3,
-    nombre: "Gym Sur",
-    direccion: "Av. La Marina 789",
-    distrito: "San Miguel",
-    telefono: "+51 1 444-0003",
-    capacidad: 100,
-    horarioApertura: "06:00",
-    horarioCierre: "22:00",
-    estado: "Mantenimiento",
-    encargado: "Carlos López",
-    active: false
-  },
-  {
-    id: 4,
-    nombre: "Gym Este",
-    direccion: "Av. Universitaria 321",
-    distrito: "Los Olivos",
-    telefono: "+51 1 444-0004",
-    capacidad: 80,
-    horarioApertura: "07:00",
-    horarioCierre: "21:00",
-    estado: "Activo",
-    encargado: "Ana Martínez",
-    active: true
-  },
-  {
-    id: 5,
-    nombre: "Gym Oeste",
-    direccion: "Av. Brasil 654",
-    distrito: "Breña",
-    telefono: "+51 1 444-0005",
-    capacidad: 90,
-    horarioApertura: "06:30",
-    horarioCierre: "22:30",
-    estado: "Cerrado",
-    encargado: "Roberto Silva",
-    active: false
-  }
-]
+import { getLocales, postLocal, putLocal, deleteLocal } from "@/services/api/Local"
 
 export default function LocalPage() {
-  const [locales, setLocales] = useState<Local[]>(localesData)
+  const [locales, setLocales] = useState<Local[]>([])
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
   const [sortField, setSortField] = useState<keyof Local>("id")
@@ -106,14 +38,27 @@ export default function LocalPage() {
   const [formData, setFormData] = useState<LocalFormData>({
     nombre: "",
     direccion: "",
-    distrito: "",
-    telefono: "",
-    capacidad: 100,
-    horarioApertura: "06:00",
-    horarioCierre: "22:00",
-    estado: "Activo",
-    encargado: ""
+    tipo: "Local",
+    capacidad: 50,
+    estado: true
   })
+
+  // Cargar locales al montar el componente
+  useEffect(() => {
+    loadLocales()
+  }, [])
+
+  const loadLocales = async () => {
+    setLoading(true)
+    try {
+      const data = await getLocales()
+      setLocales(data)
+    } catch (error) {
+      console.error("Error loading locales:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Filtrar y ordenar locales
   const filtered = useMemo(() => {
@@ -122,8 +67,7 @@ export default function LocalPage() {
       return (
         l.nombre.toLowerCase().includes(searchTerm) ||
         l.direccion.toLowerCase().includes(searchTerm) ||
-        l.distrito.toLowerCase().includes(searchTerm) ||
-        l.encargado.toLowerCase().includes(searchTerm)
+        l.tipo.toLowerCase().includes(searchTerm)
       )
     })
   }, [locales, search])
@@ -141,6 +85,10 @@ export default function LocalPage() {
       
       if (typeof aValue === "number" && typeof bValue === "number") {
         return sortDirection === "asc" ? aValue - bValue : bValue - aValue
+      }
+      
+      if (typeof aValue === "boolean" && typeof bValue === "boolean") {
+        return sortDirection === "asc" ? (aValue === bValue ? 0 : aValue ? 1 : -1) : (aValue === bValue ? 0 : aValue ? -1 : 1)
       }
       
       return 0
@@ -169,7 +117,7 @@ export default function LocalPage() {
     return sortDirection === "asc" ? " ↑" : " ↓"
   }
 
-  const handleInputChange = (field: keyof LocalFormData, value: string | number) => {
+  const handleInputChange = (field: keyof LocalFormData, value: string | number | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -177,36 +125,34 @@ export default function LocalPage() {
     setFormData({
       nombre: "",
       direccion: "",
-      distrito: "",
-      telefono: "",
-      capacidad: 100,
-      horarioApertura: "06:00",
-      horarioCierre: "22:00",
-      estado: "Activo",
-      encargado: ""
+      tipo: "Local",
+      capacidad: 50,
+      estado: true
     })
   }
 
   const handleAddLocal = async () => {
-    if (!formData.nombre || !formData.direccion || !formData.distrito) {
+    if (!formData.nombre || !formData.direccion || !formData.tipo) {
       alert("Por favor completa los campos obligatorios")
       return
     }
 
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    const newLocal: Local = {
-      id: Math.max(...locales.map(l => l.id)) + 1,
-      ...formData,
-      active: true
+    try {
+      const newLocal = await postLocal(formData)
+      if (newLocal) {
+        setLocales(prev => [...prev, newLocal])
+        setShowAdd(false)
+        resetForm()
+      } else {
+        alert("Error al crear el local")
+      }
+    } catch (error) {
+      console.error("Error creating local:", error)
+      alert("Error al crear el local")
+    } finally {
+      setLoading(false)
     }
-
-    setLocales(prev => [...prev, newLocal])
-    setShowAdd(false)
-    resetForm()
-    setLoading(false)
   }
 
   const openEditModal = (id: number) => {
@@ -215,38 +161,43 @@ export default function LocalPage() {
       setFormData({
         nombre: local.nombre,
         direccion: local.direccion,
-        distrito: local.distrito,
-        telefono: local.telefono,
+        tipo: local.tipo,
         capacidad: local.capacidad,
-        horarioApertura: local.horarioApertura,
-        horarioCierre: local.horarioCierre,
-        estado: local.estado,
-        encargado: local.encargado
+        estado: local.estado
       })
       setEditModal({ open: true, id })
     }
   }
 
   const handleEditSave = async () => {
-    if (!formData.nombre || !formData.direccion || !formData.distrito) {
+    if (!formData.nombre || !formData.direccion || !formData.tipo) {
       alert("Por favor completa los campos obligatorios")
       return
     }
 
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    setLocales(prev => 
-      prev.map(l => 
-        l.id === editModal.id 
-          ? { ...l, ...formData }
-          : l
-      )
-    )
-    setEditModal({ open: false, id: 0 })
-    resetForm()
-    setLoading(false)
+    try {
+      const updatedLocal = await putLocal({
+        id: editModal.id,
+        ...formData
+      })
+      if (updatedLocal) {
+        setLocales(prev => 
+          prev.map(l => 
+            l.id === editModal.id ? updatedLocal : l
+          )
+        )
+        setEditModal({ open: false, id: 0 })
+        resetForm()
+      } else {
+        alert("Error al actualizar el local")
+      }
+    } catch (error) {
+      console.error("Error updating local:", error)
+      alert("Error al actualizar el local")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openDeleteModal = (id: number) => {
@@ -262,40 +213,55 @@ export default function LocalPage() {
 
   const handleDelete = async (id: number) => {
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    setLocales(prev => prev.filter(l => l.id !== id))
-    setDeleteModal({ open: false, id: 0, name: "" })
-    setLoading(false)
+    try {
+      const success = await deleteLocal(id)
+      if (success) {
+        setLocales(prev => prev.filter(l => l.id !== id))
+        setDeleteModal({ open: false, id: 0, name: "" })
+      } else {
+        alert("Error al eliminar el local")
+      }
+    } catch (error) {
+      console.error("Error deleting local:", error)
+      alert("Error al eliminar el local")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const toggleLocalStatus = async (id: number) => {
     setLoading(true)
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    setLocales(prev => 
-      prev.map(l => 
-        l.id === id 
-          ? { ...l, active: !l.active }
-          : l
-      )
-    )
-    setLoading(false)
+    try {
+      const local = locales.find(l => l.id === id)
+      if (local) {
+        const updatedLocal = await putLocal({
+          ...local,
+          estado: !local.estado
+        })
+        if (updatedLocal) {
+          setLocales(prev => 
+            prev.map(l => 
+              l.id === id ? updatedLocal : l
+            )
+          )
+        } else {
+          alert("Error al cambiar el estado del local")
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling local status:", error)
+      alert("Error al cambiar el estado del local")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case "Activo":
-        return <Badge variant="default" className="bg-green-500">Activo</Badge>
-      case "Mantenimiento":
-        return <Badge variant="secondary" className="bg-yellow-500">Mantenimiento</Badge>
-      case "Cerrado":
-        return <Badge variant="destructive">Cerrado</Badge>
-      default:
-        return <Badge variant="outline">{estado}</Badge>
-    }
+  const getEstadoBadge = (estado: boolean) => {
+    return estado ? (
+      <Badge variant="default" className="bg-green-500">Activo</Badge>
+    ) : (
+      <Badge variant="destructive">Inactivo</Badge>
+    )
   }
 
   return (
@@ -360,77 +326,40 @@ export default function LocalPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="distrito" className="text-sm font-medium">Distrito</label>
+                    <label htmlFor="tipo" className="text-sm font-medium">Tipo</label>
+                    <Select value={formData.tipo} onValueChange={(value) => handleInputChange("tipo", value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Local">Local</SelectItem>
+                        <SelectItem value="Parque">Parque</SelectItem>
+                        <SelectItem value="Centro Deportivo">Centro Deportivo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label htmlFor="capacidad" className="text-sm font-medium">Capacidad</label>
                     <Input 
-                      id="distrito" 
-                      value={formData.distrito} 
-                      onChange={(e) => handleInputChange("distrito", e.target.value)}
-                      placeholder="Miraflores"
+                      id="capacidad" 
+                      type="number"
+                      value={formData.capacidad} 
+                      onChange={(e) => handleInputChange("capacidad", parseInt(e.target.value) || 50)}
+                      min="1"
+                      max="500"
                     />
                   </div>
                   <div>
-                    <label htmlFor="telefono" className="text-sm font-medium">Teléfono</label>
-                    <Input 
-                      id="telefono" 
-                      value={formData.telefono} 
-                      onChange={(e) => handleInputChange("telefono", e.target.value)}
-                      placeholder="+51 1 444-0001"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label htmlFor="capacidad" className="text-sm font-medium">Capacidad</label>
-                      <Input 
-                        id="capacidad" 
-                        type="number"
-                        value={formData.capacidad} 
-                        onChange={(e) => handleInputChange("capacidad", parseInt(e.target.value) || 100)}
-                        min="1"
-                        max="500"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="estado" className="text-sm font-medium">Estado</label>
-                      <Select value={formData.estado} onValueChange={(value) => handleInputChange("estado", value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar estado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Activo">Activo</SelectItem>
-                          <SelectItem value="Mantenimiento">Mantenimiento</SelectItem>
-                          <SelectItem value="Cerrado">Cerrado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label htmlFor="horarioApertura" className="text-sm font-medium">Apertura</label>
-                      <Input 
-                        id="horarioApertura" 
-                        type="time"
-                        value={formData.horarioApertura} 
-                        onChange={(e) => handleInputChange("horarioApertura", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="horarioCierre" className="text-sm font-medium">Cierre</label>
-                      <Input 
-                        id="horarioCierre" 
-                        type="time"
-                        value={formData.horarioCierre} 
-                        onChange={(e) => handleInputChange("horarioCierre", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="encargado" className="text-sm font-medium">Encargado</label>
-                    <Input 
-                      id="encargado" 
-                      value={formData.encargado} 
-                      onChange={(e) => handleInputChange("encargado", e.target.value)}
-                      placeholder="Juan Pérez"
-                    />
+                    <label htmlFor="estado" className="text-sm font-medium">Estado</label>
+                    <Select value={formData.estado ? "true" : "false"} onValueChange={(value) => handleInputChange("estado", value === "true")}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="true">Activo</SelectItem>
+                        <SelectItem value="false">Inactivo</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="flex gap-3 pt-4">
@@ -472,11 +401,11 @@ export default function LocalPage() {
                   </TableHead>
                   <TableHead
                     className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("distrito")}
+                    onClick={() => handleSort("tipo")}
                   >
                     <div className="flex items-center">
-                      Distrito
-                      {getSortIcon("distrito")}
+                      Tipo
+                      {getSortIcon("tipo")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -486,15 +415,6 @@ export default function LocalPage() {
                     <div className="flex items-center">
                       Dirección
                       {getSortIcon("direccion")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="w-40 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("telefono")}
-                  >
-                    <div className="flex items-center">
-                      Teléfono
-                      {getSortIcon("telefono")}
                     </div>
                   </TableHead>
                   <TableHead
@@ -515,24 +435,6 @@ export default function LocalPage() {
                       {getSortIcon("estado")}
                     </div>
                   </TableHead>
-                  <TableHead
-                    className="w-32 font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("horarioApertura")}
-                  >
-                    <div className="flex items-center">
-                      Horario
-                      {getSortIcon("horarioApertura")}
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="font-semibold cursor-pointer hover:bg-muted/80 transition-colors select-none"
-                    onClick={() => handleSort("encargado")}
-                  >
-                    <div className="flex items-center">
-                      Encargado
-                      {getSortIcon("encargado")}
-                    </div>
-                  </TableHead>
                   <TableHead className="w-32 text-center font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -543,13 +445,10 @@ export default function LocalPage() {
                       #{l.id.toString().padStart(3, "0")}
                     </TableCell>
                     <TableCell className="font-medium">{l.nombre}</TableCell>
-                    <TableCell>{l.distrito}</TableCell>
+                    <TableCell>{l.tipo}</TableCell>
                     <TableCell className="text-muted-foreground">{l.direccion}</TableCell>
-                    <TableCell>{l.telefono}</TableCell>
                     <TableCell>{l.capacidad}</TableCell>
                     <TableCell>{getEstadoBadge(l.estado)}</TableCell>
-                    <TableCell>{l.horarioApertura} - {l.horarioCierre}</TableCell>
-                    <TableCell className="text-muted-foreground">{l.encargado}</TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -564,7 +463,7 @@ export default function LocalPage() {
                             Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => toggleLocalStatus(l.id)} className="cursor-pointer">
-                            {l.active ? (
+                            {l.estado ? (
                               <>
                                 <XCircle className="mr-2 h-4 w-4" />
                                 Desactivar
@@ -590,7 +489,7 @@ export default function LocalPage() {
                 ))}
                 {paginated.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-32 text-center">
+                    <TableCell colSpan={7} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <MapPin className="w-8 h-8" />
                         <p className="text-sm">No se encontraron locales</p>
@@ -683,74 +582,40 @@ export default function LocalPage() {
               />
             </div>
             <div>
-              <label htmlFor="edit-distrito" className="text-sm font-medium">Distrito</label>
+              <label htmlFor="edit-tipo" className="text-sm font-medium">Tipo</label>
+              <Select value={formData.tipo} onValueChange={(value) => handleInputChange("tipo", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Local">Local</SelectItem>
+                  <SelectItem value="Parque">Parque</SelectItem>
+                  <SelectItem value="Centro Deportivo">Centro Deportivo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="edit-capacidad" className="text-sm font-medium">Capacidad</label>
               <Input 
-                id="edit-distrito" 
-                value={formData.distrito} 
-                onChange={(e) => handleInputChange("distrito", e.target.value)}
+                id="edit-capacidad" 
+                type="number"
+                value={formData.capacidad} 
+                onChange={(e) => handleInputChange("capacidad", parseInt(e.target.value) || 50)}
+                min="1"
+                max="500"
               />
             </div>
             <div>
-              <label htmlFor="edit-telefono" className="text-sm font-medium">Teléfono</label>
-              <Input 
-                id="edit-telefono" 
-                value={formData.telefono} 
-                onChange={(e) => handleInputChange("telefono", e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="edit-capacidad" className="text-sm font-medium">Capacidad</label>
-                <Input 
-                  id="edit-capacidad" 
-                  type="number"
-                  value={formData.capacidad} 
-                  onChange={(e) => handleInputChange("capacidad", parseInt(e.target.value) || 100)}
-                  min="1"
-                  max="500"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-estado" className="text-sm font-medium">Estado</label>
-                <Select value={formData.estado} onValueChange={(value) => handleInputChange("estado", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Activo">Activo</SelectItem>
-                    <SelectItem value="Mantenimiento">Mantenimiento</SelectItem>
-                    <SelectItem value="Cerrado">Cerrado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label htmlFor="edit-horarioApertura" className="text-sm font-medium">Apertura</label>
-                <Input 
-                  id="edit-horarioApertura" 
-                  type="time"
-                  value={formData.horarioApertura} 
-                  onChange={(e) => handleInputChange("horarioApertura", e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-horarioCierre" className="text-sm font-medium">Cierre</label>
-                <Input 
-                  id="edit-horarioCierre" 
-                  type="time"
-                  value={formData.horarioCierre} 
-                  onChange={(e) => handleInputChange("horarioCierre", e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="edit-encargado" className="text-sm font-medium">Encargado</label>
-              <Input 
-                id="edit-encargado" 
-                value={formData.encargado} 
-                onChange={(e) => handleInputChange("encargado", e.target.value)}
-              />
+              <label htmlFor="edit-estado" className="text-sm font-medium">Estado</label>
+              <Select value={formData.estado ? "true" : "false"} onValueChange={(value) => handleInputChange("estado", value === "true")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">Activo</SelectItem>
+                  <SelectItem value="false">Inactivo</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="flex gap-3 pt-4">
