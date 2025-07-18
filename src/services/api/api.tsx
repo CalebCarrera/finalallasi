@@ -1,4 +1,4 @@
-import { Cliente } from "../types/Cliente";
+import { Cliente } from "../types/Cliente"
 
 const BASE_URL = "http://localhost:8080/APIRestAllasi"
 

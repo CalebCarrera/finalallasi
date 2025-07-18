@@ -28,9 +28,9 @@ import {
   ChevronsUpDown,
 } from "lucide-react"
 
-import { getClientes, postCliente, putCliente, deleteCliente } from "../../../services/api"
-import { ClienteUI, Cliente } from "../../../types/Cliente"
 
+import { postCliente, deleteCliente, getClientes, putCliente } from "@/services/api/api"
+import { ClienteUI,Cliente } from "@/services/types/Cliente"
 type SortField = "id" | "name" | "email" | "active" | "dni" | "telefono" | "fechaInicio" | "fechaFin" | "faltas" | "planId"
 type SortDirection = "asc" | "desc"
 
